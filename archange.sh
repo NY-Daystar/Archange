@@ -3,20 +3,21 @@
 # ------------------------------------------------------------------
 # [Title] : Archange
 # [Description] : Save the history of a server
-# [Version] : v1.6.0
+# [Version] : v1.7.0
 # [Author] : Lucas Noga
-# [Shell] : Bash v5.1.0
+# [Shell] : Bash v5.2.37
 # [Usage] : ./archange.sh
+#           ./archange.sh --sync
+#           ./archange.sh --show-history
 #           ./archange.sh --verbose
 #           ./archange.sh --setup
 # ------------------------------------------------------------------
 
 PROJECT_NAME=ARCHANGE
-PROJECT_VERSION=v1.6.0
+PROJECT_VERSION=v1.7.0
 
 # Parameters to execute script
 typeset -A CONFIG=(
-    [run]=true                                         # If run is to false we don't execute the script
     [script_location]="."                              # Get absolute path to where is the script executed
     [settings_prefix]=$PROJECT_NAME                    # For settings.conf variable already used in the system ($USER, $PATH)
     [settings_file]="settings.conf"                    # Configuration file
@@ -33,6 +34,7 @@ typeset -A OPTIONS=(
     [help]=false           # If true we show the help
     [erase_trace]=false    # If true we erase trace on the remote machine
     [history]=false        # If true launch script to show all history files
+    [sync]=false           # If true launch script to sync folders
     [history_number]=-1    # If number positive show the last N history files
     [show_settings]=false  # If true launch script to show configuration file
     [setup_settings]=false # If true launch script to setup configuration file
@@ -52,7 +54,7 @@ typeset -A SERVER=(
 # Main body of script starts here
 ###
 function main {
-    read_options $@ # Read script options like (--debug)
+    read_options $@ # Read script options like (--verbose)
     log_debug "Launch Project $(log_color "${PROJECT_NAME} : ${PROJECT_VERSION}" "magenta")"
 
     # Setup script location
@@ -60,7 +62,7 @@ function main {
     log_debug "Folder where script localized: $(log_color "${CONFIG[script_location]}" "yellow")"
 
     # Read .conf file (default ./setting.conf)
-    read_settings "${CONFIG[script_location]}" "${CONFIG[settings_file]}"
+    read_settings "${CONFIG[settings_file]}" "${CONFIG[script_location]}"
 
     # Launch specific script depend of options
     launch_script
@@ -70,7 +72,11 @@ function main {
 # Show which script to execute default (history)
 ###
 function launch_script {
-    if [ ${OPTIONS[history]} == true ]; then
+    if [ ${OPTIONS[sync]} == true ]; then
+        log_debug "Sync mode"
+        sync_repository
+        return
+    elif [ ${OPTIONS[history]} == true ]; then
         log_debug "Showing history"
         show_history "${CONFIG[folder_history]}" "${OPTIONS[history_number]}"
         return
@@ -95,11 +101,6 @@ function launch_script {
 # Main method to create history
 ###
 function launch_history {
-    if [ "${CONFIG[run]}" = false ]; then
-        log_debug "No run history because some options block it"
-        return
-    fi
-
     setup_folder_history "${CONFIG[folder_history]}"
 
     get_server_path_history
@@ -117,6 +118,52 @@ function launch_history {
 }
 
 ###
+# Choose to sync repository
+###
+function sync_repository {
+    folders=($(ls -A ${SERVER[root_folder_sync]}))
+
+    default_remote_root_folder="nas"
+    read -p "Do you have a root folder in remote to setup [default: $(log_color "$default_remote_root_folder" "yellow")] : " remote_root_folder
+    if [ -z "${remote_root_folder}" ]; then
+        remote_root_folder=${default_remote_root_folder}
+    fi
+
+    subfolders_number=$(ls -1 ${SERVER[root_folder_sync]} | wc -l)
+    while true; do
+        # Show folders
+        ls -A "${SERVER[root_folder_sync]}" | pr -3Tn --width 165
+        
+        read -p "Which folder do you want to sync [1-${subfolders_number}] (type exit to quit) : " response
+        if [ $response == "exit" ]; then
+            exit 1
+        fi
+        folder_to_sync=${SERVER[root_folder_sync]}/${folders[$response]}
+
+        if [ $(is_a_number $response) = 0 ] || [ $response -lt "0" ] || [ $response -gt "${subfolders_number}" ] ;then 
+            log_color "Folder $(log_color "${response}" "yellow") $(log_color "not in range" "red")" "red"
+            continue;
+        fi
+
+        remote_folder=//${SERVER[ip]}/${remote_root_folder}/${folder_to_sync//"${SERVER[root_folder_sync]}/"}
+    
+        while true; do
+            log you choose to sync folder $(log_color "${folder_to_sync}" "yellow")
+            read -p "Do you want to sync [Y/n] ? " yn
+            case $yn in
+                [Yy]* ) 
+                    cmd="${SERVER[rclone_path]} bisync ${folder_to_sync} ${remote_folder} -v --resync"
+                    eval "$cmd"
+                    log_debug "Command executed: $(log_color "$cmd" "yellow")" 
+                    break;;
+                [Nn]* ) break;;
+                * ) echo "Please answer yes or no.";;
+            esac
+        done
+    done
+}
+
+###
 # Main method to show files history
 # $1 : [string] path to folder where history files are saved
 # $2 : [number] files to show (default: 10), -1 means all
@@ -129,7 +176,6 @@ function show_history {
 
     # if not exists exit program
     if [ $exists -eq 0 ]; then
-        log "Path $(log_color "$folder" "yellow") doesn't exist.\nPlease change $(log_color "FOLDER_HISTORY" "yellow") value in $(log_color "${CONFIG[settings_file]}" "yellow")"
         log "$(log_color "Because folder" "red") $(log_color "${SERVER[path]}" "magenta") $(log_color "doesn't exist in remote machine" "red")"
         exit 1
     fi
@@ -354,19 +400,22 @@ function check_server_file_exists {
 
 ###
 # Setup variables from settings file
-# $1 = path to the settings file (default: ./)
-# $2 = name of the settings file (default: settings.conf)
+# $1 = name of the settings file (default: settings.conf)
+# $2 = path to the settings file (default: ./)
 ###
 function read_settings {
-    path=$1
-    filename=$2
-    settings_file="$path/$filename"
-
+    filename=$1
+    path=$2
+    if [ -z $path ]; then
+        settings_file=$filename
+    else 
+        settings_file="$path/$filename"
+    fi
     log_debug "Read configuration file: $settings_file"
-
+    
     if [ ! -f "$settings_file" ]; then
-        log "WARN: $settings_file doesn't exists." "yellow"
-        log_color "Creating the file ${CONFIG[settings_file]}..."
+        log_color "WARN: $settings_file doesn't exists." "yellow"
+        log_color "Creating the file ${CONFIG[settings_file]}..." "yellow"
         setup_settings ${CONFIG[settings_file]}
 
     fi
@@ -377,8 +426,6 @@ function read_settings {
 
     # Load data to get access to remote machine
     read_settings_server $settings_file
-
-    set_settings "folder_history" "$FOLDER_HISTORY"
 
     # If folder doens't define in file config we define it here
     if [ -z "${CONFIG[folder_history]}" ]; then
@@ -404,6 +451,8 @@ function read_settings_server {
         [user]=$(eval echo \$${CONFIG[settings_prefix]}"_USER") # Env variable already defined in the system ($USER) so we prefix it with ARCHANGE_
         [password]=$(eval echo $PASSWORD)
         [path]=$(eval echo \$${CONFIG[settings_prefix]}"_PATH") # Env variable already defined in the system ($PATH) so we prefix it with ARCHANGE_
+        [root_folder_sync]=$(eval echo $ROOT_FOLDER_SYNC)
+        [rclone_path]=$(eval echo $RCLONE_PATH)
     )
 
     # Check empty values
@@ -443,7 +492,9 @@ function show_settings {
     log "\t- User:" $(log_color "${SERVER[user]}" "yellow")
     log "\t- Password:" $(log_color "${SERVER[password]}" "yellow")
     log "\t- Path:" $(log_color "${SERVER[path]}" "yellow")
-    log "\t- File where the history is saved:" $(log_color "${CONFIG[folder_history]}/${CONFIG[filename_history]}" "yellow")
+    log "\t- File where the history will be saved:" $(log_color "${CONFIG[folder_history]}/${CONFIG[filename_history]}" "yellow")
+    log "\t- Root folder to sync with remote :" $(log_color "${SERVER[root_folder_sync]}" "yellow")
+    log "\t- Rclone path :" $(log_color "${SERVER[rclone_path]}" "yellow")
 }
 
 ###
@@ -473,7 +524,8 @@ function setup_settings {
         [USER]="root"
         [PASSWORD]="root_password"
         [PATH]="/mnt/disk"
-        [FOLDER_HISTORY]="./History"
+        [ROOT_FOLDER_SYNC]=/c
+        [RCLONE_PATH]=/c/usr/bin/rclone-v1.70.3/rclone.exe
     )
 
     log_debug "Dump: $(declare -p DEFAULT_VALUES)"
@@ -483,8 +535,9 @@ function setup_settings {
     port=$(read_data "Port of remote machine (default: $(log_color ${DEFAULT_VALUES[PORT]} yellow))" "number")
     path=$(read_data "Path of remote machine to save history on your machine (default: $(log_color ${DEFAULT_VALUES[PATH]} yellow))" "text")
     user=$(read_data "User of remote machine (default: $(log_color ${DEFAULT_VALUES[USER]} yellow))" "text" 1)
-    folder=$(read_data "Folder local when you want to save your history (default: $(log_color ${DEFAULT_VALUES[FOLDER_HISTORY]} yellow))" "text")
     password=$(read_data "Password of remote machine (default: $(log_color ${DEFAULT_VALUES[PASSWORD]} yellow))" "password")
+    root_folder_sync=$(read_data "Path of local folder to sync with remote (default: $(log_color ${DEFAULT_VALUES[ROOT_FOLDER_SYNC]} yellow))" "text" 1)
+    rclone_path=$(read_data "Path where rclone executable (default: $(log_color ${DEFAULT_VALUES[RCLONE_PATH]} yellow))" "text" 1)
 
     typeset -A INPUTS+=(
         [IP]="$ip"
@@ -492,7 +545,8 @@ function setup_settings {
         [USER]="$user"
         [PASSWORD]="$password"
         [PATH]="$path"
-        [FOLDER_HISTORY]="$folder"
+        [ROOT_FOLDER_SYNC]="$root_folder_sync"
+        [RCLONE_PATH]="$rclone_path"
     )
 
     # Check all the inputs
@@ -516,7 +570,7 @@ function setup_settings {
     fi
 
     # Write the settings
-    write_settings_file $file "$(declare -p INPUTS)"
+    write_settings_file ./$file "$(declare -p INPUTS)"
 
     # show the new settings
     show_settings $file
@@ -547,7 +601,7 @@ function check_inputs {
             min_char=1
             regex="^[0-9]{0,5}$"
             ;;
-        "USER" | "PATH" | "PORT" | "FOLDER_HISTORY")
+        "USER" | "PATH" | "PORT" )
             min_char=1
             regex=""
             ;;
@@ -609,10 +663,11 @@ function write_settings_file {
 
     echo "IP=${DATA[IP]}" >>$file
     echo "PORT=${DATA[PORT]}" >>$file
-    echo "ARCHANGE_USER=${DATA[USER]}" >>$file
+    echo "${PROJECT_NAME}_USER=${DATA[USER]}" >>$file
     echo "PASSWORD=${DATA[PASSWORD]}" >>$file
-    echo "ARCHANGE_PATH=${DATA[PATH]}" >>$file
-    echo "FOLDER_HISTORY=${DATA[FOLDER_HISTORY]}" >>$file
+    echo "${PROJECT_NAME}_PATH=${DATA[PATH]}" >>$file
+    echo "ROOT_FOLDER_SYNC=${DATA[ROOT_FOLDER_SYNC]}" >>$file
+    echo "RCLONE_PATH=${DATA[RCLONE_PATH]}" >>$file
 }
 
 ###
@@ -655,6 +710,9 @@ function read_options {
         "--no-details")
             log_debug "No details activated"
             set_option "no_details" "true"
+            ;;
+        "--sync")
+            set_option "sync" "true"
             ;;
         "--history")
             set_option "history" "true"
@@ -872,9 +930,10 @@ help() {
     log "Version $PROJECT_VERSION"
     log "Save the history of a server with a ls command by creating a file history in the local machine"
     log
-    log "Syntax: archange [-v|--no-details|--setup|--history]"
+    log "Syntax: archange [-v|--no-details|--setup|--history][--sync]"
     log "Options:"
 
+    log "\t --sync \t Sync one of local folder with remote folder"
     log "\t --erase-trace \t\t Erase trace on the server"
     log "\t --history=<N> \t Show history saved if where N is the number of history files to show (ex: history=5) we display only the last 5 files backups, (default unlimited)"
     log "\t --no-details \t\t Get only the filename in your history file instead of (size, date, etc...)"
