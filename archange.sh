@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------
 # [Title] : Archange
 # [Description] : Save the history of a server
-# [Version] : v1.7.0
+# [Version] : v1.8.0
 # [Author] : Lucas Noga
 # [Shell] : Bash v5.2.37
 # [Usage] : ./archange.sh
@@ -14,7 +14,7 @@
 # ------------------------------------------------------------------
 
 PROJECT_NAME=ARCHANGE
-PROJECT_VERSION=v1.7.0
+PROJECT_VERSION=v1.8.0
 
 # Parameters to execute script
 typeset -A CONFIG=(
@@ -121,7 +121,7 @@ function launch_history {
 # Choose to sync repository
 ###
 function sync_repository {
-    folders=($(ls -A ${SERVER[root_folder_sync]}))
+    readarray -t folders < <(ls -A ${SERVER[root_folder_sync]})
 
     default_remote_root_folder="nas"
     read -p "Do you have a root folder in remote to setup [default: $(log_color "$default_remote_root_folder" "yellow")] : " remote_root_folder
@@ -131,22 +131,26 @@ function sync_repository {
 
     subfolders_number=$(ls -1 ${SERVER[root_folder_sync]} | wc -l)
     while true; do
-        # Show folders
         ls -A "${SERVER[root_folder_sync]}" | pr -3Tn --width 165
         
         read -p "Which folder do you want to sync [1-${subfolders_number}] (type exit to quit) : " response
         if [ $response == "exit" ]; then
             exit 1
         fi
-        folder_to_sync=${SERVER[root_folder_sync]}/${folders[$response]}
-
+        
         if [ $(is_a_number $response) = 0 ] || [ $response -lt "0" ] || [ $response -gt "${subfolders_number}" ] ;then 
             log_color "Folder $(log_color "${response}" "yellow") $(log_color "not in range" "red")" "red"
             continue;
         fi
 
-        remote_folder=//${SERVER[ip]}/${remote_root_folder}/${folder_to_sync//"${SERVER[root_folder_sync]}/"}
-    
+        let index=${response}-1
+        folder_to_sync=\"${SERVER[root_folder_sync]}/${folders[$index]}\"
+        folder_to_sync="${folder_to_sync// /\\ }"
+        echo $folder_to_sync
+
+        remote_folder=\"//${SERVER[ip]}/${remote_root_folder}${folder_to_sync//${SERVER[root_folder_sync]}/}\"
+        remote_folder="${remote_folder// /\\ }"
+
         while true; do
             log you choose to sync folder $(log_color "${folder_to_sync}" "yellow")
             read -p "Do you want to sync [Y/n] ? " yn

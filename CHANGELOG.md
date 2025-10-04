@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Project releases
 
+## 1.8.0 - Octobre, 04th 2025 - Small fixes
+
+### Fixed
+
+-   repository name with spaces
+-   index of repository
+
 ## 1.7.0 - August, 22st 2025 - Syncing with rclone
 
 ### Added

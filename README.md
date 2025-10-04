@@ -1,6 +1,6 @@
 # Archange project
 
-**_Version v1.7.0_**
+**_Version v1.8.0_**
 
 Save the history of a server by creating a file history
 
