@@ -35,6 +35,7 @@ typeset -A OPTIONS=(
     [erase_trace]=false    # If true we erase trace on the remote machine
     [history]=false        # If true launch script to show all history files
     [sync]=false           # If true launch script to sync folders
+    [bisync]=false          # If true launch script to bisync folders
     [history_number]=-1    # If number positive show the last N history files
     [show_settings]=false  # If true launch script to show configuration file
     [setup_settings]=false # If true launch script to setup configuration file
@@ -75,6 +76,10 @@ function launch_script {
     if [ ${OPTIONS[sync]} == true ]; then
         log_debug "Sync mode"
         sync_repository
+        return
+    elif [ ${OPTIONS[bisync]} == true ]; then
+        log_debug "Bisync mode"
+        bisync_repository
         return
     elif [ ${OPTIONS[history]} == true ]; then
         log_debug "Showing history"
@@ -118,9 +123,9 @@ function launch_history {
 }
 
 ###
-# Choose to sync repository
+# Display folders can be synced and select one of them
 ###
-function sync_repository {
+function choose_folder {
     readarray -t folders < <(ls -A ${SERVER[root_folder_sync]})
 
     default_remote_root_folder="nas"
@@ -130,40 +135,68 @@ function sync_repository {
     fi
 
     subfolders_number=$(ls -1 ${SERVER[root_folder_sync]} | wc -l)
+
+    ls -A "${SERVER[root_folder_sync]}" | pr -3Tn --width 165
+    
+    read -p "Which folder do you want to sync [1-${subfolders_number}] (type exit to quit) : " response
+    if [ $response == "exit" ]; then
+        exit 1
+    fi
+    
+    if [ $(is_a_number $response) = 0 ] || [ $response -lt "0" ] || [ $response -gt "${subfolders_number}" ] ;then 
+        log_color "Folder $(log_color "${response}" "yellow") $(log_color "not in range" "red")" "red"
+        continue;
+    fi
+
+    let index=${response}-1
+    folder_to_sync=\"${SERVER[root_folder_sync]}/${folders[$index]}\"
+    folder_to_sync="${folder_to_sync// /\\ }"
+    echo $folder_to_sync
+
+    remote_folder=\"//${SERVER[ip]}/${remote_root_folder}${folder_to_sync//${SERVER[root_folder_sync]}/}\"
+    remote_folder="${remote_folder// /\\ }"
+}
+
+###
+# Choose to sync repository
+###
+function sync_repository {
     while true; do
-        ls -A "${SERVER[root_folder_sync]}" | pr -3Tn --width 165
+        choose_folder
+        log you choose to sync folder $(log_color "${folder_to_sync}" "yellow")
+        cmd="${SERVER[rclone_path]} sync ${folder_to_sync} ${remote_folder} -v --progress --checksum --max-delete 0"
+        log_debug "Command executed: $(log_color "${cmd}" "yellow")"
+
+        read -p "Do you want to sync [Y/n] ? " yn
+        case $yn in
+            [Yy]* ) 
+                eval "${cmd}"
+                break;;
+            [Nn]* ) break;;
+            * ) echo "Please answer yes or no.";;
+        esac
+    done
+}
+
+###
+# Choose to bisync repository
+###
+function bisync_repository {
+    while true; do
+        choose_folder
+        log you choose to bisync folder $(log_color "${folder_to_sync}" "yellow")
         
-        read -p "Which folder do you want to sync [1-${subfolders_number}] (type exit to quit) : " response
-        if [ $response == "exit" ]; then
-            exit 1
-        fi
-        
-        if [ $(is_a_number $response) = 0 ] || [ $response -lt "0" ] || [ $response -gt "${subfolders_number}" ] ;then 
-            log_color "Folder $(log_color "${response}" "yellow") $(log_color "not in range" "red")" "red"
-            continue;
-        fi
+        cmd="${SERVER[rclone_path]} bisync ${folder_to_sync} ${remote_folder} -v --resync"
+        log_debug "Command executed: $(log_color "${cmd}" "yellow")" 
 
-        let index=${response}-1
-        folder_to_sync=\"${SERVER[root_folder_sync]}/${folders[$index]}\"
-        folder_to_sync="${folder_to_sync// /\\ }"
-        echo $folder_to_sync
-
-        remote_folder=\"//${SERVER[ip]}/${remote_root_folder}${folder_to_sync//${SERVER[root_folder_sync]}/}\"
-        remote_folder="${remote_folder// /\\ }"
-
-        while true; do
-            log you choose to sync folder $(log_color "${folder_to_sync}" "yellow")
-            read -p "Do you want to sync [Y/n] ? " yn
-            case $yn in
-                [Yy]* ) 
-                    cmd="${SERVER[rclone_path]} bisync ${folder_to_sync} ${remote_folder} -v --resync"
-                    eval "$cmd"
-                    log_debug "Command executed: $(log_color "$cmd" "yellow")" 
-                    break;;
-                [Nn]* ) break;;
-                * ) echo "Please answer yes or no.";;
-            esac
-        done
+        read -p "Do you want to bisync [Y/n] ? " yn
+        case $yn in
+            [Yy]* ) 
+                eval "${cmd}"
+                break;;
+            [Nn]* ) break;;
+            * ) echo "Please answer yes or no.";;
+        esac
     done
 }
 
@@ -718,6 +751,9 @@ function read_options {
         "--sync")
             set_option "sync" "true"
             ;;
+        "--bisync")
+            set_option "bisync" "true"
+            ;;
         "--history")
             set_option "history" "true"
             [ -n $value ] && set_option "history_number" "$value" # If a value is entered we update the option
@@ -792,24 +828,24 @@ function read_data {
 
     if [ -z $min_char ]; then min_char=0; fi
 
-    read_options=""
+    read_arguments=""
     case $type in
     "text")
-        read_options="-r"
+        read_arguments="-r"
         ;;
     "number")
-        read_options="-r"
+        read_arguments="-r"
         ;;
     "password")
-        read_options="-rs"
+        read_arguments="-rs"
         ;;
     *) ;;
     esac
 
     # read command value
-    read $read_options -p "$message : " value
+    read ${read_arguments} -p "${message} : " value
 
-    echo $value
+    echo ${value}
 }
 
 ###
