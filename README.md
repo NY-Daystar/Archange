@@ -28,6 +28,7 @@ Developped in Bash `v5.2.37`
 -   [Comming Next](#comming-next)
 -   [Get Started](#get-started)
 -   [Create alias](#create-a-persistant-alias)
+-   [Read man page](#manual-page)
 -   [How to use](#how-to-use)
 -   [Script options](#script-options)
 -   [Export configuration of DSM](#export-configuration-of-dsm)
@@ -103,6 +104,20 @@ Then in your `~/.bashrc` or `~/bash_profile` execute `bash_aliases` with this
 if [ -f ~/.bash_aliases ]; then
 . ~/.bash_aliases
 fi
+```
+
+## Manual page
+
+To install manual page
+
+```bash
+sudo cp archange.1 /usr/local/man/man1 && sudo mandb
+```
+
+Then you can read it
+
+```bash
+man archange
 ```
 
 ## How to use

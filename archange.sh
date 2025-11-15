@@ -2,11 +2,12 @@
 
 # ------------------------------------------------------------------
 # [Title] : Archange
-# [Description] : Save the history of a server
-# [Version] : v1.8.0
+# [Description] : Save the history of a server, or synced repository between machines
+# [Version] : v1.9.0
 # [Author] : Lucas Noga
 # [Shell] : Bash v5.2.37
 # [Usage] : ./archange.sh
+#           ./archange.sh --bisync
 #           ./archange.sh --sync
 #           ./archange.sh --show-history
 #           ./archange.sh --verbose
@@ -974,6 +975,7 @@ help() {
     log "Options:"
 
     log "\t --sync \t Sync one of local folder with remote folder"
+    log "\t --bisync \t Bisync one of local folder with remote folder"
     log "\t --erase-trace \t\t Erase trace on the server"
     log "\t --history=<N> \t Show history saved if where N is the number of history files to show (ex: history=5) we display only the last 5 files backups, (default unlimited)"
     log "\t --no-details \t\t Get only the filename in your history file instead of (size, date, etc...)"
