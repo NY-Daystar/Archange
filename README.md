@@ -1,31 +1,26 @@
 # Archange project
 
-**_Version v1.8.0_**
+**_Version v1.9.0_**
 
-Save the history of a server by creating a file history
+![Bash](https://img.shields.io/badge/Bash-444444?style=for-the-badge&logo=gnubash&logoColor=green)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/6a23974671c74910938e9aaf753c4253)](https://app.codacy.com/project/badge/Grade/6a23974671c74910938e9aaf753c4253)](https://app.codacy.com/gh/NY-Daystar/Archange/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+[![Archange-CI](https://github.com/NY-Daystar/archange/actions/workflows/dotnet.yml/badge.svg)](https://github.com/NY-Daystar/addams/actions/workflows/dotnet.yml) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Version](https://img.shields.io/github/tag/NY-Daystar/archange.svg)](https://github.com/NY-Daystar/archange/releases)
+
+![GitHub repo size](https://img.shields.io/github/repo-size/ny-daystar/Archange) ![GitHub language count](https://img.shields.io/github/languages/count/ny-daystar/archange) ![GitHub top language](https://img.shields.io/github/languages/top/ny-daystar/archange)
+
+![GitHub issues](https://img.shields.io/github/issues/ny-daystar/archange) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/ny-daystar/archange) ![GitHub commit activity (branch)](https://img.shields.io/github/commit-activity/m/ny-daystar/archange/main) [![All Contributors](https://img.shields.io/badge/all_contributors-1-blue.svg?style=circular)](#credits) [![Used By](https://img.shields.io/sourcegraph/rrc/github.com/NY-Daystar/Archange.svg)](https://sourcegraph.com/github.com/NY-Daystar/Archange)
+
+![GitHub watchers](https://img.shields.io/github/watchers/ny-daystar/archange) ![GitHub forks](https://img.shields.io/github/forks/ny-daystar/archange) ![GitHub Repo stars](https://img.shields.io/github/stars/ny-daystar/archange)
+
+C# project to export in csv spotify user's playlist
+
+Script to save the history of a server by creating a file history, and also synchronized files server-to-server.  
+Source code analysed with [DeepSource](https://deepsource.com/) and [Codacy](https://app.codacy.com)
 
 Developped in Bash `v5.2.37`
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Version](https://img.shields.io/github/tag/LucasNoga/Archange.svg)](https://github.com/NY-Daystar/Archange/releases)
-[![Total views](https://img.shields.io/sourcegraph/rrc/github.com/NY-Daystar/Archange.svg)](https://sourcegraph.com/github.com/NY-Daystar/Archange)
-
-![GitHub watchers](https://img.shields.io/github/watchers/ny-daystar/Archange)
-![GitHub forks](https://img.shields.io/github/forks/ny-daystar/Archange)
-![GitHub Repo stars](https://img.shields.io/github/stars/ny-daystar/Archange)
-![GitHub repo size](https://img.shields.io/github/repo-size/ny-daystar/Archange)
-![GitHub language count](https://img.shields.io/github/languages/count/ny-daystar/Archange)
-![GitHub top language](https://img.shields.io/github/languages/top/ny-daystar/Archange) <a href="https://codeclimate.com/github/ny-daystar/Archange/maintainability"><img src="https://api.codeclimate.com/v1/badges/715c6f3ffb08de5ca621/maintainability" /></a>  
-![GitHub commit activity (branch)](https://img.shields.io/github/commit-activity/m/ny-daystar/Archange/main)
-![GitHub issues](https://img.shields.io/github/issues/ny-daystar/Archange)
-![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/ny-daystar/Archange)
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-blue.svg?style=circular)](#contributors)
-
-![Bash](https://img.shields.io/badge/Bash-444444?style=for-the-badge&logo=gnubash&logoColor=green)
-
 ## Index
 
--   [Comming Next](#comming-next)
 -   [Get Started](#get-started)
 -   [Create alias](#create-a-persistant-alias)
 -   [Read man page](#manual-page)
