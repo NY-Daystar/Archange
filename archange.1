@@ -1,0 +1,72 @@
+.TH ARCHANGE 1 "2025-11-15" "Version 1.9.0" "User Commands"
+.SH NAME
+archange \- Save the history of a server, or synced repository between machines.
+.SH SYNOPSIS
+.B archange [\fIOPTIONS\fR]
+
+.SH DESCRIPTION
+Function 1 - Save the history of a server with a ls command by creating a file history in the local machine  
+
+Function 2 - Can sync folders and files between machines
+
+.SH OPTIONS
+.TP
+.B -h, --help
+Display help and version
+
+.TP
+.B -v, --bisync
+Bisync one of local folder with remote folder
+
+.TP
+.B -v, --erase-trace
+Erase trace on the server when using the history mode
+
+.TP
+.B --history=<NUMBER> 
+Show history saved if where NUMBER is the number of history files to show (ex: history=5) 
+we display only the last 5 files backups, (default unlimited)
+
+.TP
+.B -v, --no-details
+Get only the filename in your history file instead of (size, date, etc...)
+
+.TP
+.B --setup
+Allow to create or modify configuration
+
+.TP
+.B --show-settings
+Show configuration data with your file
+
+.TP
+.B -v, --sync
+Sync one of local folder with remote folder
+
+.TP
+.B -v, --verbose
+Debug mode
+
+.SH EXAMPLES
+.TP           
+.B ./archange.sh --setup - Setup configuration applications
+.TP
+.B ./archange.sh [--erase-trace] - Use the function 1, history mode to list all files in the server, --erase-trace will delete in remote folder useless files
+.TP
+.B ./archange.sh --bisync - Use the function 2, with both sync src and destination 
+.TP
+.B ./archange.sh --sync - Use the function 2, with sync src into destination 
+.TP           
+.B ./archange.sh --show-history - Show the history files when use function 1
+
+.SH COPYRIGHT
+Copyright  ©  2018  Free  Software  Foundation,  Inc.   License  GPLv3+:  GNU   GPL   version   3   or   later
+<https://gnu.org/licenses/gpl.html>.
+This  is  free software: you are free to change and redistribute it.  There is NO WARRANTY, to the extent per‐
+mitted by law.
+
+.SH AUTHOR
+Written by Lucas Noga from NY-DAYSTAR https://github.com/NY-Daystar
+
+.SH SEE ALSO
+The Github repository and its README https://github.com/NY-Daystar/Archange
