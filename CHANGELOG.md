@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Project releases
 
-## 1.8.0 - Octobre, 04th 2025 - Small fixes
+## 1.9.0 - November, 16th 2025 - Sync and Bisync
+
+### Added
+
+-   Codacy analyzer
+-   Manual page linux
+
+### Changed
+
+-   Can use `sync` or `bisync`
+
+## 1.8.0 - October, 04th 2025 - Small fixes
 
 ### Fixed
 
