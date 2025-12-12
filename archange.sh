@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------
 # [Title] : Archange
 # [Description] : Save the history of a server, or synced repository between machines
-# [Version] : v1.9.0
+# [Version] : v1.9.1
 # [Author] : Lucas Noga
 # [Shell] : Bash v5.2.37
 # [Usage] : ./archange.sh
@@ -15,7 +15,7 @@
 # ------------------------------------------------------------------
 
 PROJECT_NAME=ARCHANGE
-PROJECT_VERSION=v1.9.0
+PROJECT_VERSION=v1.9.1
 
 # Parameters to execute script
 typeset -A CONFIG=(
@@ -36,7 +36,8 @@ typeset -A OPTIONS=(
     [erase_trace]=false    # If true we erase trace on the remote machine
     [history]=false        # If true launch script to show all history files
     [sync]=false           # If true launch script to sync folders
-    [bisync]=false          # If true launch script to bisync folders
+    [bisync]=false         # If true launch script to bisync folders
+    [gzip]=false           # If true gzip history file to save disk space
     [history_number]=-1    # If number positive show the last N history files
     [show_settings]=false  # If true launch script to show configuration file
     [setup_settings]=false # If true launch script to setup configuration file
@@ -117,9 +118,7 @@ function launch_history {
     copy_history_to_local
 
     # Remove file(s) from servers if option is activated
-    if [ "${OPTIONS[erase_trace]}" = true ]; then
-        erase_trace
-    fi
+    [[ "${OPTIONS[erase_trace]}" = true ]] && erase_trace
 }
 
 ###
@@ -353,15 +352,22 @@ function get_remote_command {
 # Copy history file from server to local
 ###
 function copy_history_to_local {
-    folder=${CONFIG[folder_history]}
     log_debug "Copy History in local machine...\nConnection to the SERVER..."
 
-    server_path=${SERVER[ip]}:${SERVER[path]}/${CONFIG[server_file]}
-    local_path=$folder/${CONFIG[filename_history]}
-    log "Copy the file from $(log_color "$server_path" yellow) to $(log_color "$local_path" yellow)"
+    remote_path="${SERVER[path]}/${CONFIG[server_file]}"
+    local_path="${CONFIG[folder_history]}/${CONFIG[filename_history]}"
+    log "Copy the file from $(log_color "${remote_path}" yellow) to $(log_color "${local_path}" yellow)"
+
+    file_to_copy=${remote_path}
+    if [ "${OPTIONS[gzip]}" = true ];then
+        log_debug "Gzipping file ${file_to_copy}"
+        sshpass -p "${SERVER[password]}" ssh -p "${SERVER[port]}" "${SERVER[user]}@${SERVER[ip]}" -qq -t "gzip -f ${file_to_copy}"      
+        file_to_copy="${file_to_copy}.gz"
+        local_path="${local_path}.gz"
+    fi
 
     # Copy the file
-    sshpass -p "${SERVER[password]}" scp -P "${SERVER[port]}" "${SERVER[user]}@${SERVER[ip]}:${SERVER[path]}/${CONFIG[server_file]}" "${folder}/${CONFIG[filename_history]}"
+    sshpass -p "${SERVER[password]}" scp -P "${SERVER[port]}" "${SERVER[user]}@${SERVER[ip]}:${file_to_copy}" "${local_path}"
 
     ret=$?
 
@@ -371,26 +377,20 @@ function copy_history_to_local {
         log "Exiting..."
         exit 1
     fi
-    log "$(log_color "History copied:" "green")" "$(log_color "${folder}/${CONFIG[filename_history]}" "yellow")"
+    log "$(log_color "History copied:" "green")" "$(log_color "${local_path}" "yellow")"
 }
 
 ###
 # Remove trace of your pass on the server
-# For now removing HISTORY.txt file
+# For now removing HISTORY.txt and HISTORY.txt.gz
 ###
 function erase_trace {
     log_debug "Erasing trace..."
     filepath=${SERVER[path]}/${CONFIG[server_file]}
 
     remove_server_file "${filepath}"
+    remove_server_file "${filepath}.gz"
 
-    ret=$?
-
-    # if something's wrong
-    if [ ! $ret -eq 0 ]; then
-        log_color "ERROR: Trace not erased from server" "red"
-        exit 1
-    fi
     log_color "Trace erased from remote machine" "green"
 }
 
@@ -768,6 +768,9 @@ function read_options {
         "--history")
             set_option "history" "true"
             [ -n "${value}" ] && set_option "history_number" "$value" # If a value is entered we update the option
+            ;;
+        "--gzip")
+            set_option "gzip" "true"
             ;;
         "--show-settings")
             set_option "show_settings" "true"
