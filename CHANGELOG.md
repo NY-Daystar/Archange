@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Project releases
 
+## 1.9.1 - December, 12th 2025 - Add gzip
+
+### Added
+
+-   Include gzip option to optimize history file
+
 ## 1.9.0 - November, 16th 2025 - Sync and Bisync
 
 ### Added

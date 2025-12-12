@@ -1,8 +1,8 @@
 # Archange project
 
-**_Version v1.9.0_**
+**_Version v1.9.1_**
 
-![Bash](https://img.shields.io/badge/Bash-444444?style=for-the-badge&logo=gnubash&logoColor=green)
+![Bash](https://img.shields.io/badge/Bash-444444?style=for-the-badge&logo=gnubash&logoColor=green)  
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/6a23974671c74910938e9aaf753c4253)](https://app.codacy.com/project/badge/Grade/6a23974671c74910938e9aaf753c4253) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Version](https://img.shields.io/github/tag/NY-Daystar/archange.svg)](https://github.com/NY-Daystar/archange/releases)
 
 ![GitHub repo size](https://img.shields.io/github/repo-size/ny-daystar/Archange) ![GitHub language count](https://img.shields.io/github/languages/count/ny-daystar/archange) ![GitHub top language](https://img.shields.io/github/languages/top/ny-daystar/archange)
@@ -35,15 +35,14 @@ Developped in Bash `v5.2.37`
 You need to create a file call settings.conf in the repo like this
 
 ```bash
-$ git clone https://github.com/LucasNoga/Archange.git
-$ cd archange
+git clone https://github.com/LucasNoga/Archange.git && cd archange
 ```
 
 Then create your configuration file **settings.conf** base on the sample
 
 ```bash
-$ cp settings.sample.conf settings.conf
-$ vim settings.conf
+cp settings.sample.conf settings.conf
+vim settings.conf
 ```
 
 Put this into the file with your server intels
