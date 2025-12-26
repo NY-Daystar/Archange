@@ -1,4 +1,4 @@
-.TH ARCHANGE 1 "2025-11-15" "Version 1.9.0" "User Commands"
+.TH ARCHANGE 1 "2026-01-05" "Version 1.9.2" "User Commands"
 .SH NAME
 archange \- Save the history of a server, or synced repository between machines.
 .SH SYNOPSIS
@@ -15,11 +15,11 @@ Function 2 - Can sync folders and files between machines
 Display help and version
 
 .TP
-.B -v, --bisync
-Bisync one of local folder with remote folder
+.B --bisync
+Bisync one of source folder with destination folder
 
 .TP
-.B -v, --erase-trace
+.B --erase-trace
 Erase trace on the server when using the history mode
 
 .TP
@@ -28,7 +28,7 @@ Show history saved if where NUMBER is the number of history files to show (ex: h
 we display only the last 5 files backups, (default unlimited)
 
 .TP
-.B -v, --no-details
+.B --no-details
 Get only the filename in your history file instead of (size, date, etc...)
 
 .TP
@@ -40,8 +40,8 @@ Allow to create or modify configuration
 Show configuration data with your file
 
 .TP
-.B -v, --sync
-Sync one of local folder with remote folder
+.B --sync
+Sync one of source folder with destination folder
 
 .TP
 .B -v, --verbose
@@ -51,7 +51,7 @@ Debug mode
 .TP           
 .B ./archange.sh --setup - Setup configuration applications
 .TP
-.B ./archange.sh [--erase-trace] - Use the function 1, history mode to list all files in the server, --erase-trace will delete in remote folder useless files
+.B ./archange.sh [--erase-trace] - Use the function 1, history mode to list all files in the server, --erase-trace will delete in destionation folder useless files
 .TP
 .B ./archange.sh --bisync - Use the function 2, with both sync src and destination 
 .TP

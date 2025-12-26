@@ -1,6 +1,6 @@
 # Archange project
 
-**_Version v1.9.1_**
+**_Version v1.9.2_**
 
 ![Bash](https://img.shields.io/badge/Bash-444444?style=for-the-badge&logo=gnubash&logoColor=green)  
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/6a23974671c74910938e9aaf753c4253)](https://app.codacy.com/project/badge/Grade/6a23974671c74910938e9aaf753c4253) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Version](https://img.shields.io/github/tag/NY-Daystar/archange.svg)](https://github.com/NY-Daystar/archange/releases)
@@ -50,19 +50,19 @@ Put this into the file with your server intels
 ```bash
 IP="XX.XX.XX.XX"
 PORT="XX"
-ARCHANGE_USER="XXXXXX"
+USER="XXXXXX"
 PASSWORD="XXXXXX"
-ARCHANGE_PATH="XXXXXX"
-ROOT_FOLDER_SYNC="XXXXXX"
+SOURCE_FOLDER="XXXXXX"
+DESTINATION_PATH="XXXXXX"
 RCLONE_PATH="XXXXXX"
 ```
 
--   IP (mandatory) : Ip of your server
+-   IP (optionnal) : Ip of your server, optionnal if you want to use `SOURCE_FOLDER` and `DESTINATION_FOLDER` locally
 -   PORT (mandatory): SSH port of your server
--   ARCHANGE_USER (mandatory): User which has access to the server
+-   USER (mandatory): User which has access to the server
 -   PASSWORD (optional): Password of the user to get access to the server (if you not specified in your config it will be requested later)
--   ARCHANGE_PATH (optional): Path on your server to get the history files (if you not specified in your config it will be requested later )
--   ROOT_FOLDER_SYNC (optional): [sync option](#sync)- Path to the folder in local machine if you want to sync one of its subfolder with remote machine
+-   SOURCE_FOLDER (optional): [sync option](#sync)- Path to the folder in local machine if you want to sync one of its subfolder with remote machine
+-   DESTINATION_PATH (optional): Path on your server to get the history files (if you not specified in your config it will be requested later )
 -   RCLONE_PATH (optional) : [sync option](#sync) - Path of RCLONE executable to sync folder
     you can complete the **XX** with your server credentials, careful your user needs read and write access
 
@@ -71,11 +71,10 @@ Example
 ```bash
 IP="192.168.1.1"
 PORT="21"
-ARCHANGE_USER="toto"
+USER="toto"
 PASSWORD="password"
-ARCHANGE_PATH="/server/dev" # get history files to the folder /server/dev
-FOLDER_HISTORY="./MyHistory" # Store files into the folder ./MyHistory
-ROOT_FOLDER_SYNC=/c
+SOURCE_FOLDER=/c
+DESTINATION_PATH="/server/dev" # get history files to the folder /server/dev
 RCLONE_PATH=/c/usr/bin/rclone-v1.70.3/rclone.exe
 ```
 
@@ -194,7 +193,7 @@ $ ./archange.sh --sync
 -   Connect to your remote machine with ssh command `ssh <USER>@<IP> -p <PORT>`
 -   Go to your folder when you want to get history
 -   Create a file in your server with `ls -R . > HISTORY.txt` command in choosen repository
--   Copy in your local machine it choosen folder with `scp -p <PORT> <USER>@<IP>:/PATH/.../HISTORY.txt HISTORY-$(date +"%Y-%m-%d").txt` this file
+-   Copy in your local machine it choosen folder with `scp -p <PORT> <USER>@<IP>:/DESTINATION_PATH/.../HISTORY.txt HISTORY-$(date +"%Y-%m-%d").txt` this file
 
 ## Trouble-shootings
 
