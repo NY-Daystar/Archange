@@ -1,4 +1,4 @@
-.TH ARCHANGE 1 "2026-01-05" "Version 1.9.2" "User Commands"
+.TH ARCHANGE 1 "2026-01-05" "Version 1.9.3" "User Commands"
 .SH NAME
 archange \- Save the history of a server, or synced repository between machines.
 .SH SYNOPSIS
@@ -9,6 +9,8 @@ Function 1 - Save the history of a server with a ls command by creating a file h
 
 Function 2 - Can sync folders and files between machines
 
+Function 3 - Check duplicates files into a folder
+
 .SH OPTIONS
 .TP
 .B -h, --help
@@ -17,6 +19,10 @@ Display help and version
 .TP
 .B --bisync
 Bisync one of source folder with destination folder
+
+.TP
+.B --duplicate
+Check duplicate files in single folder by checking in all subfolders
 
 .TP
 .B --erase-trace
@@ -55,8 +61,10 @@ Debug mode
 .TP
 .B ./archange.sh --bisync - Use the function 2, with both sync src and destination 
 .TP
-.B ./archange.sh --sync - Use the function 2, with sync src into destination 
-.TP           
+.B ./archange.sh --sync - Use the function 2, with sync src into destination
+.TP
+.B ./archange.sh --duplicates  - Use the function 3, list duplicate files from a directory 
+.TP
 .B ./archange.sh --show-history - Show the history files when use function 1
 
 .SH COPYRIGHT

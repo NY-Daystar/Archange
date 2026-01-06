@@ -1,6 +1,6 @@
 # Archange project
 
-**_Version v1.9.2_**
+**_Version v1.9.3_**
 
 ![Bash](https://img.shields.io/badge/Bash-444444?style=for-the-badge&logo=gnubash&logoColor=green)  
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/6a23974671c74910938e9aaf753c4253)](https://app.codacy.com/project/badge/Grade/6a23974671c74910938e9aaf753c4253) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Version](https://img.shields.io/github/tag/NY-Daystar/archange.svg)](https://github.com/NY-Daystar/archange/releases)
@@ -55,16 +55,18 @@ PASSWORD="XXXXXX"
 SOURCE_FOLDER="XXXXXX"
 DESTINATION_PATH="XXXXXX"
 RCLONE_PATH="XXXXXX"
+EXCLUDED_DIRECTORIES="XXXXXXXXXXXXXX"
 ```
 
 -   IP (optionnal) : Ip of your server, optionnal if you want to use `SOURCE_FOLDER` and `DESTINATION_FOLDER` locally
 -   PORT (mandatory): SSH port of your server
 -   USER (mandatory): User which has access to the server
 -   PASSWORD (optional): Password of the user to get access to the server (if you not specified in your config it will be requested later)
--   SOURCE_FOLDER (optional): [sync option](#sync)- Path to the folder in local machine if you want to sync one of its subfolder with remote machine
--   DESTINATION_PATH (optional): Path on your server to get the history files (if you not specified in your config it will be requested later )
--   RCLONE_PATH (optional) : [sync option](#sync) - Path of RCLONE executable to sync folder
+-   SOURCE_FOLDER (optional): Path to the folder in local machine if you want to sync one of its subfolder with remote machine see [sync option](#sync)
+-   DESTINATION_PATH (optional): Path on your server to get the history files (if you not specified in your config it will be requested later)
+-   RCLONE_PATH (optional) : Path of RCLONE executable to sync folder, see [sync option](#sync)
     you can complete the **XX** with your server credentials, careful your user needs read and write access
+-   EXCLUDED_DIRECTORIES (optional) : list of directories to exclude with sync option
 
 Example
 
@@ -76,6 +78,7 @@ PASSWORD="password"
 SOURCE_FOLDER=/c
 DESTINATION_PATH="/server/dev" # get history files to the folder /server/dev
 RCLONE_PATH=/c/usr/bin/rclone-v1.70.3/rclone.exe
+EXCLUDED_DIRECTORIES=node_modules,.git,dist
 ```
 
 ## Create a persistant alias
@@ -117,13 +120,13 @@ man archange
 If you setup the alias
 
 ```bash
-$ archange
+archange
 ```
 
 if not
 
 ```bash
-$ ./archange.sh
+./archange.sh
 ```
 
 ## Script options
@@ -132,45 +135,57 @@ Here's are the options on purpose
 Show help of the script
 
 ```bash
-$ ./archange.sh --help
+./archange.sh --help
 ```
 
 Display debug mode
 
 ```bash
-$ ./archange.sh -v
-$ ./archange.sh --verbose
+./archange.sh -v
+./archange.sh --verbose
 ```
 
 Only the filename in your history file instead of (size, date, etc...)
 
 ```bash
-$ ./archange.sh --no-details
+./archange.sh --no-details
 ```
 
 Show history saved if history=5 we display only the last 5 files backups
 
 ```bash
-$ ./archange.sh --history
-$ ./archange.sh --history=5
+./archange.sh --history
+./archange.sh --history=5
 ```
 
 Show configuration data with your file
 
 ```bash
-$ ./archange.sh --show-settings
+./archange.sh --show-settings
 ```
 
 Setup configuration file
 
 ```bash
-$ ./archange.sh --setup
+./archange.sh --setup
 ```
 
 Erase trace on the server
 
 ```bash
-$ ./archange.sh --trace-erase
+./archange.sh --trace-erase
+```
+
+Sync or Bisync from source folder to destination
+
+```bash
+./archange.sh --[bi]sync
+```
+
+Check duplicate files in folder
+
+```bash
+./archange.sh --duplicate
 ```
 
 #### sync
@@ -180,7 +195,7 @@ Use rclone to sync local folder with remote folder
 [You can download rclone here](https://rclone.org/downloads/)
 
 ```bash
-$ ./archange.sh --sync
+./archange.sh --sync
 ```
 
 ## Export configuration of DSM

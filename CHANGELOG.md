@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Project releases
 
+## 1.9.3 - January 6th, 2026 - new features
+
+### Added
+
+-   exclude multiple folders with `EXCLUDE_LIST` option when using `sync` and `bysinc`
+-   Can use `--duplicate` to check duplicate files into a folder
+
+### Changed
+
+-   Detection of invalid configuration
+
+### Fixed
+
+-   Handle errors with `--bisync` with wrong destination path
+
 ## 1.9.2 - January 5th, 2026 - corrections
 
 ### Added
@@ -14,7 +29,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 -   Log file with `--sync` and `--bisync` options
 -   Errors file with `--sync` and `--bisync` options
 
-### CHANGED
+### Changed
 
 -   In settings.conf and script variable `ARCHANGE_USER` -> `USER`
 -   In settings.conf and script variable `ARCHANGE_PATH` -> `DESTINATION_FOLDER`
@@ -41,7 +56,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
--   Can use `sync` or `bisync`
+-   Can use `--sync` or `--bisync`
 
 ## 1.8.0 - October 04th, 2025 - Small fixes
 
