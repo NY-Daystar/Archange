@@ -3,29 +3,34 @@
 # ------------------------------------------------------------------
 # [Title] : Archange
 # [Description] : Save the history of a server, or synced repository between machines
-# [Version] : v1.9.2
+# [Version] : v1.9.3
 # [Author] : Lucas Noga
 # [Shell] : Bash v5.2.37
 # [Usage] : ./archange.sh
 #           ./archange.sh --bisync
 #           ./archange.sh --sync
+#           ./archange.sh --duplicate
 #           ./archange.sh --show-history
 #           ./archange.sh --verbose
 #           ./archange.sh --setup
+#           ./archange.sh --duplicate
 # ------------------------------------------------------------------
 
 PROJECT_NAME=ARCHANGE
-PROJECT_VERSION=v1.9.2
+PROJECT_VERSION=v1.9.3
 
 # Parameters to execute script
 typeset -A CONFIG=(
     [script_location]="."                               # Get absolute path to where is the script executed
     [settings_file]="settings.conf"                     # Configuration file
+    [excluded_list_file]="exclude-list.conf"            # Exclude list file for folder 
+    [filter_file]="filters.conf"                        # Filter file to use rclone correctly
     [server_file]="HISTORY.txt"                         # File created on the server to get history
     [folder_history]=""                                 # Folder to store on the local machine the history
     [filename_history]=HISTORY-$(date +"%Y-%m-%d").txt  # Name of the file which will get the copy (default HISTORY_date)
     [default_folder_history]="History"                  # Default Folder to store if no define in settings.conf
-    [errors_file]="errors.txt"                          # Errors files listing files problematic
+    [nis_file]="not_in_source.txt"                      # When using sync display file not in source directory
+    [duplicate_file]="duplicates.txt"                   # File to list duplicate files in path
     [log_file]="archange.log"                           # File of log when sync is launched
     [debug_color]=light_blue                            # Color to show log in debug mode
 )
@@ -38,6 +43,7 @@ typeset -A OPTIONS=(
     [history]=false        # If true launch script to show all history files
     [sync]=false           # If true launch script to sync folders
     [bisync]=false         # If true launch script to bisync folders
+    [duplicate]=false      # If true launch script to check duplicate files
     [gzip]=false           # If true gzip history file to save disk space
     [history_number]=-1    # If number positive show the last N history files
     [show_settings]=false  # If true launch script to show configuration file
@@ -46,12 +52,15 @@ typeset -A OPTIONS=(
 )
 
 # Parameters to get access to the remote machine for destination folder
-typeset -A SERVER=(
-    [ip]=""       # ip of the server set in configuration file
-    [port]=""     # port of the server set in configuration file
-    [user]=""     # user of the server set in configuration file
-    [password]="" # password of the server set in configuration file
-    [path]=""     # destination path of the server set in configuration file
+typeset -A SETTINGS=(
+    [ip]=""             # ip of the server set in configuration file
+    [port]=""           # port of the server set in configuration file
+    [user]=""           # user of the server set in configuration file
+    [password]=""       # password of the server set in configuration file
+    [source_folder]=""  # source path to copy on the server
+    [path]=""           # destination path of the server set in configuration file
+    [rclone_path]=""    # path of rclone to execute sync, bisync commands
+    [excluded_list]=""  # list of subfolders to exclude when using sync or bisync (delimited by ,)
 )
 
 ###
@@ -71,23 +80,27 @@ function main {
 # Show which script to execute default (history)
 ###
 function execute {
+    read_settings "${CONFIG[settings_file]}" "${CONFIG[script_location]}"
+    create_exclude_file
+
     if [ "${OPTIONS[sync]}" == true ]; then
         log_debug "Sync mode"
-        read_settings "${CONFIG[settings_file]}" "${CONFIG[script_location]}"
-        handle_errors_file
+        handle_nis_file
         sync_repository
         return
     elif [ "${OPTIONS[bisync]}" == true ]; then
         log_debug "Bisync mode"
-        read_settings "${CONFIG[settings_file]}" "${CONFIG[script_location]}"
-        handle_errors_file
+        handle_nis_file
         bisync_repository
         return
     elif [ "${OPTIONS[history]}" == true ]; then
         log_debug "Showing history"
-        read_settings "${CONFIG[settings_file]}" "${CONFIG[script_location]}"
         show_history "${CONFIG[folder_history]}" "${OPTIONS[history_number]}"
         return
+    elif [ "${OPTIONS[duplicate]}" == true ]; then
+        log_debug "Check duplicates"
+        check_duplicates
+        return 
     elif [ "${OPTIONS[help]}" == true ]; then
         help
         return
@@ -99,12 +112,26 @@ function execute {
         return
     fi
 
-    # Create the file to kept data history of your server
-    read_settings "${CONFIG[settings_file]}" "${CONFIG[script_location]}"
     launch_history
 }
 
 ################################################################### Core ###################################################################
+
+###
+# Create file .conf to exclude subfolders
+###
+function create_exclude_file {   
+    > "${CONFIG[excluded_list_file]}" # Resetting file
+    {
+        echo "# list of subfolders and file to exclude"
+        IFS=',' read -ra list <<< "${SETTINGS[excluded_list]}"
+        for folder in "${list[@]}"; do
+            echo "**/${folder}/"
+        done
+    } >> "${CONFIG[excluded_list_file]}"
+
+    return 0
+}
 
 ###
 # Main method to create history
@@ -125,36 +152,46 @@ function launch_history {
 }
 
 ###
-# Handle error file because rclone doesn't put all errors in single try
+# Handle nis file because rclone doesn't put all occurences in single try
 ###
-function handle_errors_file {
-    [[ ! -f "${CONFIG[errors_file]}" ]] && log_debug "no error file" && return
+function handle_nis_file {
+    [[ ! -f "${CONFIG[nis_file]}" ]] && log_debug "not in source file not exist" && return
     
-    words="$(wc -w "${CONFIG[errors_file]}" | awk '{print $1}')"
+    words="$(wc -w "${CONFIG[nis_file]}" | awk '{print $1}')"
     if [ "${words}" -ne 0 ];then 
-        log_color "WARN: ${CONFIG[errors_file]} is not empty, please check it" "red"
+        log_color "WARN: ${CONFIG[nis_file]} is not empty, please check it" "red"
         return
     else 
-        rm "${CONFIG[errors_file]}"
+        rm "${CONFIG[nis_file]}"
     fi
 }
 
 ###
-# Display folders can be synced and select one of them
+# Set a destination folder to sync or bisync files
 ###
-function choose_folder {
-    default_destination_folder="${SERVER[path]}"
-   
-    read -p "Setup your destination folder [default: $(log_color "${default_destination_folder}" "yellow")] : " destination_folder
+function set_destination_folder {
+    [[ -n "${SETTINGS[ip]}" ]] && default="//${SETTINGS[ip]}/${SETTINGS[path]}" || default="${SETTINGS[path]}"
+    read -p "Setup your destination folder [default: $(log_color "${default}" "yellow")] : " destination_path
+    echo
     if [ -z "${destination_folder}" ]; then
-        destination_folder=${default_destination_folder}
+        destination_path="${default}"
+    elif [ -n "${SETTINGS[ip]}" ]; then
+        destination_path="//${SETTINGS[ip]}/${destination_path}"
     fi
+    log "Your folder is $(log_color "${destination_path}" "yellow")"
+}
 
-    if [ -n "${SERVER[ip]}" ]; then
-        destination_folder="${SERVER[ip]}/${destination_folder}"
-    fi
+###
+# Display folders can be synced and select one or several
+# $1 : [string] path to destination folder
+###
+#TODO deepsource et codacy non-conformites
+#TODO tester toutes les options avant de faire la release
+function choose_directories {
+    root_dir="${1:-${SETTINGS[source_folder]}}"
+    root_dir=$(echo "${root_dir}" | tr -d '\n')
 
-    subfolders_number=$(find "${SERVER[source_folder]}" -maxdepth 1 -type d -print| wc -l)
+    subfolders_number=$(find "${root_dir}" -maxdepth 1 -type d -print| wc -l)
 
     get_terminal_width
     size=$?
@@ -169,52 +206,82 @@ function choose_folder {
         col_num=3
     fi
     
-    cmd="ls -A ${SERVER[source_folder]} | pr -${col_num}Tn --width $size"
+    cmd="ls -A ${root_dir} | pr -${col_num}Tn --width $size"
     log_debug "Command executed: $(log_color "${cmd}" "yellow")"
     eval "${cmd}"
     
-    read -p "Which folder do you want to sync [1-${subfolders_number}] (type exit to quit) : " response
+    read -p "Which folder do you want [1-${subfolders_number}] (type exit to quit) : " response
+
+    [[ "${response}" == "" ]] && return 
     if [ "${response}" == "exit" ]; then
         exit 1
     fi
-    
-    if [ "$(is_a_number "${response}")" = 0 ] || [ "${response}" -lt "0" ] || [ "${response}" -gt "${subfolders_number}" ] ;then 
-        log_color "Folder $(log_color "${response}" "yellow") $(log_color "not in range" "red")" "red"
-        return;
-    fi
 
-    let index=${response}-1
-    readarray -t folders < <(ls -A "${SERVER[source_folder]}")
-    source_folder=\"${SERVER[source_folder]}/${folders[$index]}\"
-    source_folder="${source_folder// /\\ }"
+    source_dirs=""
+    readarray -t folders < <(ls -A "${root_dir}")
+    for el in ${response//,/ }; do
+            if [ "$(is_a_number "${el}")" = 0 ] || [ "${el}" -lt "0" ] || [ "${el}" -gt "${subfolders_number}" ] ;then 
+                log_color "Folder $(log_color "${el}" "yellow") $(log_color "not in range" "red")" "red"
+                return;
+            fi
+            let index=${el}-1
+            source_dirs="${source_dirs},${folders[$index]}"
+    done
+    source_dirs="${source_dirs:1}"
 
-    if [ -n "${SERVER[ip]}" ]; then
-        destination_folder=\"//${destination_folder}${source_folder//${SERVER[source_folder]}/}\"
-    else
-        destination_folder="${destination_folder}${source_folder//${SERVER[source_folder]}/}"
-    fi
+    log "you choose folder $(log_color "${source_dirs}" "yellow")"
+    for dir in ${source_dirs//,/ };do
+        log "Destination folder: $(log_color "${destination_path}/${dir}" "yellow")"
+    done
+}
 
-    log_debug "Destination folder: ${destination_folder}"
+###
+# Create filter file to use rclone 
+###
+function create_filter {
+    # insert folders to exclude
+    {
+        while IFS= read -r line; do
+            echo "- ${line}"
+        done < "${CONFIG[excluded_list_file]}"
+    } > "${CONFIG[filter_file]}"
+
+    # include folders selected
+    {
+        for dir in ${source_dirs//,/ }; do 
+            echo "+ /${dir}/**"
+        done
+    } >> "${CONFIG[filter_file]}"
+
+    # ignore all the rest
+    {
+        echo "- *"
+    } >> "${CONFIG[filter_file]}"
 }
 
 ###
 # Choose to sync repository
 ###
 function sync_repository {
-    while true; do
-        choose_folder
-        [[ -z "${source_folder}" ]] && continue
+    set_destination_folder
 
-        log "you choose to sync folder $(log_color "${source_folder}" "yellow")"
-        cmd="${SERVER[rclone_path]} sync ${source_folder} ${destination_folder} -v --progress --checksum --max-delete 0 --error ${CONFIG[errors_file]} --log-file ${CONFIG[log_file]}"
-        log_debug "Command executed: $(log_color "${cmd}" "yellow")"
+    while true; do
+        choose_directories
+        create_filter
+        [[ -z "${source_dirs}" ]] && continue
+
+        command="${SETTINGS[rclone_path]} sync ${SETTINGS[source_folder]} ${destination_path} --filter-from='${CONFIG[filter_file]}' -v --progress --checksum --max-delete 0 --error ${CONFIG[nis_file]} --log-file ${CONFIG[log_file]}"
+        
+        # Dry run in debug mode
+        [[ "${OPTIONS[debug]}" = true ]] && log_color "DEBUG MODE DRY_RUN IS ACTIVATED" "magenta" && command="${command} --dry-run"
 
         read -p "Do you want to sync [Y/n] ? " yn
         case $yn in
             [Yy]* ) 
-                eval "${cmd}"
-                break;;
-            [Nn]* ) break;;
+                log "command executed: $(log_color "${command}" "yellow")"
+                eval "${command}"
+                continue;;
+            [Nn]* ) continue;;
             * ) echo "Please answer yes or no.";;
         esac
     done
@@ -224,19 +291,25 @@ function sync_repository {
 # Choose to bisync repository
 ###
 function bisync_repository {
-    while true; do
-        choose_folder
-        log "you choose to bisync folder $(log_color "${source_folder}" "yellow")"
-        
-        cmd="${SERVER[rclone_path]} bisync ${source_folder} ${destination_folder} -v --resync"
-        log_debug "Command executed: $(log_color "${cmd}" "yellow")" 
+    set_destination_folder
 
-        read -p "Do you want to bisync [Y/n] ? " yn
+    while true; do
+        choose_directories
+        create_filter
+        [[ -z "${source_dirs}" ]] && continue
+        
+        command="${SETTINGS[rclone_path]} bisync ${SETTINGS[source_folder]} ${destination_path} --filter-from='${CONFIG[filter_file]}' -v --resync --progress"
+        
+        # Dry run in debug mode
+        [[ "${OPTIONS[debug]}" = true ]] && log_color "DEBUG MODE DRY_RUN IS ACTIVATED" "magenta" && command="${command} --dry-run"
+
+        read -p "Do you want to sync [Y/n] ? " yn
         case $yn in
             [Yy]* ) 
-                eval "${cmd}"
-                break;;
-            [Nn]* ) break;;
+                log "command executed: $(log_color "${command}" "yellow")"
+                eval "${command}"
+                continue;;
+            [Nn]* ) continue;;
             * ) echo "Please answer yes or no.";;
         esac
     done
@@ -255,7 +328,7 @@ function show_history {
 
     # if not exists exit program
     if [ "${exists}" -eq 0 ]; then
-        log "$(log_color "Because folder" "red") $(log_color "${SERVER[path]}" "magenta") $(log_color "doesn't exist in remote machine" "red")"
+        log "$(log_color "Because folder" "red") $(log_color "${SETTINGS[path]}" "magenta") $(log_color "doesn't exist in remote machine" "red")"
         exit 1
     fi
 
@@ -311,8 +384,8 @@ function get_folder {
 # Read server password asked if it's not set in configuration
 ###
 function read_server_password {
-    if [ -z "${SERVER[password]}" ]; then
-        read -s -p "Type your nas admin password: " SERVER[password]
+    if [ -z "${SETTINGS[password]}" ]; then
+        read -s -p "Type your nas admin password: " SETTINGS[password]
     fi
 }
 
@@ -320,10 +393,10 @@ function read_server_password {
 # Get path on the server to get the history
 ###
 function get_server_path_history {
-    if [ -z "${SERVER[path]}" ]; then
-        read -p "Type the path you want to get history: " SERVER[path]
+    if [ -z "${SETTINGS[path]}" ]; then
+        read -p "Type the path you want to get history: " SETTINGS[path]
     fi
-    log "Path of the scan history: $(log_color "${SERVER[path]}" "yellow")"
+    log "Path of the scan history: $(log_color "${SETTINGS[path]}" "yellow")"
 }
 
 ###
@@ -331,20 +404,20 @@ function get_server_path_history {
 ###
 function create_history {
     log_debug "Creating SERVER history..."
-    log_debug "Connection to the SERVER..."
+    log_debug "Connection to the Server..."
 
-    folder_exists=$(check_server_folder_exists "${SERVER[path]}")
+    folder_exists=$(check_server_folder_exists "${SETTINGS[path]}")
     if [ "${folder_exists}" -eq 0 ]; then
-        log "$(log_color "Folder" "red") $(log_color "${SERVER[path]}" "magenta") $(log_color "doesn't exist in remote machine" "red")"
+        log "$(log_color "Folder" "red") $(log_color "${SETTINGS[path]}" "magenta") $(log_color "doesn't exist in remote machine" "red")"
         exit 1
     else
-        log_debug "Path ${SERVER[path]} exists history creating..."
+        log_debug "Path ${SETTINGS[path]} exists history creating..."
     fi
 
     # get command to use in remote machine
     cmd=$(get_remote_command)
 
-    sshpass -p "${SERVER[password]}" ssh -p "${SERVER[port]}" "${SERVER[user]}@${SERVER[ip]}" "cd ${SERVER[path]} && ${cmd} > ${CONFIG[server_file]}"  
+    sshpass -p "${SETTINGS[password]}" ssh -p "${SETTINGS[port]}" "${SETTINGS[user]}@${SETTINGS[ip]}" "cd ${SETTINGS[path]} && ${cmd} > ${CONFIG[server_file]}"  
 
     ret=$?
     # if something's wrong
@@ -353,7 +426,7 @@ function create_history {
         log "Exiting..."
         exit 1
     fi
-    log "$(log_color "History created on the server here:" "green")" "$(log_color "${SERVER[ip]}:${SERVER[path]}/${CONFIG[server_file]}" "yellow")"
+    log "$(log_color "History created on the server here:" "green")" "$(log_color "${SETTINGS[ip]}:${SETTINGS[path]}/${CONFIG[server_file]}" "yellow")"
 }
 
 ###
@@ -378,19 +451,19 @@ function get_remote_command {
 function copy_history {
     log_debug "Copy history in local machine...\nConnection to the SERVER..."
 
-    file_to_copy="${SERVER[path]}/${CONFIG[server_file]}"
+    file_to_copy="${SETTINGS[path]}/${CONFIG[server_file]}"
     destination_path="${CONFIG[folder_history]}/${CONFIG[filename_history]}"
     log "Copy the file from $(log_color "${file_to_copy}" yellow) to $(log_color "${destination_path}" yellow)"
 
     if [ "${OPTIONS[gzip]}" = true ];then
         log_debug "Gzipping file ${file_to_copy}"
-        sshpass -p "${SERVER[password]}" ssh -p "${SERVER[port]}" "${SERVER[user]}@${SERVER[ip]}" -qq -t "gzip -f ${file_to_copy}"      
+        sshpass -p "${SETTINGS[password]}" ssh -p "${SETTINGS[port]}" "${SETTINGS[user]}@${SETTINGS[ip]}" -qq -t "gzip -f ${file_to_copy}"      
         file_to_copy="${file_to_copy}.gz"
         destination_path="${destination_path}.gz"
     fi
 
     # Copy the file
-    sshpass -p "${SERVER[password]}" scp -P "${SERVER[port]}" "${SERVER[user]}@${SERVER[ip]}:${file_to_copy}" "${destination_path}"
+    sshpass -p "${SETTINGS[password]}" scp -P "${SETTINGS[port]}" "${SETTINGS[user]}@${SETTINGS[ip]}:${file_to_copy}" "${destination_path}"
 
     ret=$?
 
@@ -409,7 +482,7 @@ function copy_history {
 ###
 function erase_trace {
     log_debug "Erasing trace..."
-    filepath=${SERVER[path]}/${CONFIG[server_file]}
+    filepath=${SETTINGS[path]}/${CONFIG[server_file]}
 
     remove_server_file "${filepath}"
     remove_server_file "${filepath}.gz"
@@ -434,7 +507,7 @@ function remove_server_file {
     fi
 
     # remove file
-    sshpass -p "${SERVER[password]}" ssh -p "${SERVER[port]}" "${SERVER[user]}@${SERVER[ip]}" -qq -t "rm ${filepath}"
+    sshpass -p "${SETTINGS[password]}" ssh -p "${SETTINGS[port]}" "${SETTINGS[user]}@${SETTINGS[ip]}" -qq -t "rm ${filepath}"
 
     ret=$?
 
@@ -444,7 +517,114 @@ function remove_server_file {
         log "Exiting..."
         exit 1
     fi
-    log "File $(log_color "${SERVER[ip]}":"${filepath}" yellow) removed"
+    log "File $(log_color "${SETTINGS[ip]}":"${filepath}" yellow) removed"
+}
+
+###
+# Set a folder to check duplicates
+###
+function set_checking_duplicate_folder {
+    [[ -n "${SETTINGS[ip]}" ]] && default="//${SETTINGS[ip]}/${SETTINGS[path]}" || default="${SETTINGS[path]}"
+    read -p "Which folder do you want to check [default: $(log_color "${default}" "yellow")] : " duplicate_path
+    
+    if [ -z "${duplicate_path}" ]; then
+        duplicate_path="${default}"
+    fi
+    log "Your duplicate folder is $(log_color "${duplicate_path}" "yellow")"
+}
+
+function check_duplicates {
+    set_checking_duplicate_folder
+    choose_directories "${duplicate_path}"
+    
+    [[ -z "${source_dirs}" ]] && log_color "Error you select no folder to check" "red" && return
+
+    duplicate_dir="${duplicate_path}/${source_dirs}"
+    
+    dir_to_exclude=()
+    while IFS= read -r line; do
+        if [[ ${line} != \#* ]];then
+            dir_to_exclude+=( ${line::-1} )
+        fi
+    done < "${CONFIG[excluded_list_file]}"
+
+    for excluded in "${dir_to_exclude[@]}"; do
+        EXCLUDES+=( -path "$excluded" -prune -o )
+    done
+
+    declare -A file_groups
+
+    total_files=$(find "${duplicate_dir}" "${FIND_EXCLUDES[@]}" -type f | wc -l)
+
+    let progress=0
+    let start_time=$(date +%s)
+    let last_print=0
+
+    # Scanning files
+    while IFS= read -r file; do
+        show_process "Scanning files" "${total_files}" "$((progress++))" "${last_print}" "${start_time}"
+        filename="$(basename "$file")"
+        key="$filename"
+        [[ ${key} == .* ]] && key=${key:1} # remove . in beginning
+        key="${key%%.*}"                   # remove multiple extensions
+        key="${key,,}"                     # case minus
+        #echo v $key
+        key="$(echo "$key" \
+              | sed -E 's/[ _-]+//g; s/\([0-9]+\)//g; s/é/e/g; s/è/e/g; s/à/a/g; s/ç/c/g; s/ô/o/g; s/€/euros/g; ')"
+
+        #echo $key - $file
+        file_groups["$key"]+="${file}"$'\n'
+        
+    done < <(
+        find "${duplicate_dir}" \
+            "${EXCLUDES[@]}" \
+            -type f
+    )
+    log_color "Scan finished : ${progress} / ${total} files" "green"
+
+    # Display groups with duplicates
+    rm -f "${CONFIG["duplicate_file"]}"
+    group_id=0
+    for key in "${!file_groups[@]}"; do
+        count=$(echo -n "${file_groups[${key}]}" | grep -c '^')
+        if (( count > 1 )); then
+            group_id=$((group_id + 1))
+
+            log_color "🟦 Group ${group_id} - ${key}" "magenta"
+            while IFS= read -r line; do
+                    printf "   - %s\n" "$line"
+            done <<< "${file_groups[$key]}"
+            echo
+            {
+                echo "🟦 Group ${group_id} - ${key}"
+                while IFS= read -r line; do
+                    printf "   - %s\n" "$line"
+                done <<< "${file_groups[$key]}"
+                echo
+            } >> "${CONFIG["duplicate_file"]}"
+        fi
+    done
+    
+}
+
+###
+# Display message to show progression of process
+###
+function show_process(){
+    message="${1:-"<PROCESS>"}"
+    total="${2:-"<TOTAL>"}"
+    processed="${3:-"<PROCESSED>"}"
+    last_print="${4:-"$(date +%s)"}"
+    start="${5:-"$(date +%s)"}"
+    interval=3
+    now=$(date +%s)
+
+    if (( now - last_print >= interval )); then
+        percent=$(( processed * 100 / total ))
+        elapsed=$(( now - start ))
+        echo -ne "\r⏳ ${message} : ${processed} / ${total} files processed (${percent}%) - ${elapsed}s\r"
+        last_print="${now}"
+    fi
 }
 
 ###
@@ -454,7 +634,7 @@ function remove_server_file {
 ###
 function check_server_folder_exists {
     folder_path=$1
-    sshpass -p "${SERVER[password]}" ssh -p "${SERVER[port]}" "${SERVER[user]}"@"${SERVER[ip]}" -q [[ -d "${folder_path}" ]] && echo 1 || echo 0
+    sshpass -p "${SETTINGS[password]}" ssh -p "${SETTINGS[port]}" "${SETTINGS[user]}"@"${SETTINGS[ip]}" -q [[ -d "${folder_path}" ]] && echo 1 || echo 0
 }
 
 ###
@@ -464,7 +644,7 @@ function check_server_folder_exists {
 ###
 function check_server_file_exists {
     filepath=$1
-    sshpass -p "${SERVER[password]}" ssh -p "${SERVER[port]}" "${SERVER[user]}"@"${SERVER[ip]}" -q [[ -f "${filepath}" ]] && echo 1 || echo 0
+    sshpass -p "${SETTINGS[password]}" ssh -p "${SETTINGS[port]}" "${SETTINGS[user]}"@"${SETTINGS[ip]}" -q [[ -f "${filepath}" ]] && echo 1 || echo 0
 }
 
 ################################################################### Settings functions ###################################################################
@@ -491,11 +671,37 @@ function read_settings {
 
     fi
 
-    . "$settings_file"
+    . "${settings_file}"
     log_debug "Configuration file $settings_file loaded"
 
     # Load data to get access to remote machine
-    read_settings_server "${settings_file}"
+    SETTINGS+=(
+        [ip]="$(eval echo "${IP}")"
+        [port]="$(eval echo "${PORT}")"
+        [user]="$(eval echo "${USER}")"
+        [password]="$(eval echo "${PASSWORD}")"
+        [path]="$(eval echo "${DESTINATION_PATH}")"
+        [source_folder]="$(eval echo "${SOURCE_FOLDER}")"
+        [rclone_path]="$(eval echo "${RCLONE_PATH}")"
+        [excluded_list]="$(eval echo "${EXCLUDED_DIRECTORIES}")"
+    )
+
+    error="false"
+    # Check empty values
+    if [ -z "${SETTINGS[port]}" ]; then
+        log_color "ERROR: PORT is not defined into ${settings_file}" "red"
+        error="true"
+    fi
+    if [ -z "${SETTINGS[user]}" ]; then
+        log_color "ERROR: USER is not defined into ${settings_file}" "red"
+        error="true"
+    fi
+
+    if [ "${error}" == true ];then
+        log_color "Your settings file is invalid, you need to setup it" "red"
+        setup_settings
+        return
+    fi
 
     # If folder doens't define in file config we define it here
     if [ -z "${CONFIG[folder_history]}" ]; then
@@ -505,37 +711,7 @@ function read_settings {
     fi
 
     log_debug "Dump: $(declare -p CONFIG)"
-    log_debug "Dump: $(declare -p SERVER)"
-}
-
-###
-# Setup remote machine (user, password, ip, port) from configuration file
-# $1 = path to the config file (default: <script_location_path>/settings.conf)
-###
-function read_settings_server {
-    settings_file=$1
-
-    SERVER+=(
-        [ip]="$(eval echo "${IP}")"
-        [port]="$(eval echo "${PORT}")"
-        [user]="$(eval echo "${USER}")"
-        [password]="$(eval echo "${PASSWORD}")"
-        [path]="$(eval echo "${DESTINATION_PATH}")"
-        [source_folder]="$(eval echo "${SOURCE_FOLDER}")"
-        [rclone_path]="$(eval echo "${RCLONE_PATH}")"
-    )
-
-    # Check empty values
-    if [ -z "${SERVER[port]}" ]; then
-        log_color "ERROR: PORT is not defined into $settings_file" "red"
-        log "Exiting..."
-        exit 1
-    fi
-    if [ -z "${SERVER[user]}" ]; then
-        log_color "ERROR: USER is not defined into $settings_file" "red"
-        log "Exiting..."
-        exit 1
-    fi
+    log_debug "Dump: $(declare -p SETTINGS)"
 }
 
 ###
@@ -552,14 +728,15 @@ function show_settings {
     read_settings "${file}"
 
     log "Here's your settings: "
-    log "\t- Ip: $(log_color "${SERVER[ip]}" "yellow")"
-    log "\t- Port: $(log_color "${SERVER[port]}" "yellow")"
-    log "\t- User: $(log_color "${SERVER[user]}" "yellow")"
-    log "\t- Password: $(log_color "${SERVER[password]}" "yellow")"
+    log "\t- Ip: $(log_color "${SETTINGS[ip]}" "yellow")"
+    log "\t- Port: $(log_color "${SETTINGS[port]}" "yellow")"
+    log "\t- User: $(log_color "${SETTINGS[user]}" "yellow")"
+    log "\t- Password: $(log_color "${SETTINGS[password]}" "yellow")"
     log "\t- File where the history will be saved: $(log_color "${CONFIG[folder_history]}/${CONFIG[filename_history]}" "yellow")"
-    log "\t- Source path : $(log_color "${SERVER[source_folder]}" "yellow")"
-    log "\t- Destination path : $(log_color "${SERVER[path]}" "yellow")"
-    log "\t- Rclone path : $(log_color "${SERVER[rclone_path]}" "yellow")"
+    log "\t- Source path : $(log_color "${SETTINGS[source_folder]}" "yellow")"
+    log "\t- Destination path : $(log_color "${SETTINGS[path]}" "yellow")"
+    log "\t- Rclone path : $(log_color "${SETTINGS[rclone_path]}" "yellow")"
+    log "\t- Excluded folders : $(log_color "${SETTINGS[excluded_list]}" "yellow")"
 }
 
 ###
@@ -582,19 +759,22 @@ function setup_settings {
         fi
     fi
 
+    default_settings_file="settings.sample.conf"
+
     # DEFAULT VALUES
     typeset -A DEFAULT_VALUES=(
-        [IP]="192.168.0.1"
-        [PORT]="22"
-        [USER]="root"
-        [PASSWORD]="root_password"
-        [SOURCE_FOLDER]=/c
-        [DESTINATION_PATH]="/mnt/disk"
-        [RCLONE_PATH]=/c/usr/bin/rclone-v1.70.3/rclone.exe
+        [IP]=$(grep -Po "(?<=IP=).+" ${default_settings_file})
+        [PORT]=$(grep -Po "(?<=PORT=).+" ${default_settings_file})
+        [USER]=$(grep -Po "(?<=USER=).+" ${default_settings_file})
+        [PASSWORD]=$(grep -Po "(?<=PASSWORD=).+" ${default_settings_file})
+        [SOURCE_FOLDER]=$(grep -Po "(?<=SOURCE_FOLDER=).+" ${default_settings_file})
+        [DESTINATION_PATH]=$(grep -Po "(?<=DESTINATION_PATH=).+" ${default_settings_file})
+        [RCLONE_PATH]=$(grep -Po "(?<=RCLONE_PATH=).+" ${default_settings_file})
+        [EXCLUDED_DIRECTORIES]=$(grep -Po "(?<=EXCLUDED_DIRECTORIES=).+" ${default_settings_file})
     )
 
     log_debug "Dump: $(declare -p DEFAULT_VALUES)"
-
+ 
     # Read value for the user
     ip=$(read_data "Ip of remote machine (default: $(log_color "${DEFAULT_VALUES[IP]}" yellow))" "number")
     port=$(read_data "Port of remote machine (default: $(log_color "${DEFAULT_VALUES[PORT]}" yellow))" "number")
@@ -603,6 +783,7 @@ function setup_settings {
     password=$(read_data "Password of remote machine (default: $(log_color "${DEFAULT_VALUES[PASSWORD]}" yellow))" "password")
     source_folder=$(read_data "Path of source folder to sync with destination path (default: $(log_color "${DEFAULT_VALUES[SOURCE_FOLDER]}" yellow))" "text" 1)
     rclone_path=$(read_data "Path where rclone executable (default: $(log_color "${DEFAULT_VALUES[RCLONE_PATH]}" yellow))" "text" 1)
+    excluded_directories=$(read_data "List of directories to exclude (default: $(log_color "${DEFAULT_VALUES[EXCLUDED_DIRECTORIES]}" yellow))" "text" 1)
 
     typeset -A INPUTS+=(
         [IP]="$ip"
@@ -612,6 +793,7 @@ function setup_settings {
         [DESTINATION_PATH]="$path"
         [SOURCE_FOLDER]="$source_folder"
         [RCLONE_PATH]="$rclone_path"
+        [EXCLUDED_DIRECTORIES]="$excluded_directories"
     )
 
     # Check all the inputs
@@ -639,7 +821,7 @@ function setup_settings {
     # show the new settings
     show_settings "${file}"
 
-    log "You can now restart the script"
+    log_color "You can now restart the script" "magenta"
     exit 0
 }
 
@@ -684,7 +866,7 @@ function check_inputs {
         # if no values
         if [ "${count}" -eq 0 ]; then
             log_debug "Setting default value for $key: ${default_value}"
-             DATA+=(["$key"]=${default_value})
+            DATA+=(["$key"]=${default_value})
             continue
         # if less than expected
         elif [ "${count}" -lt $min_char ]; then
@@ -734,6 +916,7 @@ function write_settings_file {
         echo SOURCE_FOLDER="${DATA[SOURCE_FOLDER]}"
         echo DESTINATION_PATH="${DATA[DESTINATION_PATH]}"
         echo RCLONE_PATH="${DATA[RCLONE_PATH]}"
+        echo EXCLUDED_DIRECTORIES="${DATA[EXCLUDED_DIRECTORIES]}"
     } >> "$file"
 }
 
@@ -786,6 +969,9 @@ function read_options {
         "--history")
             set_option "history" "true"
             [ -n "${value}" ] && set_option "history_number" "$value" # If a value is entered we update the option
+            ;;
+        "--duplicate")
+            set_option "duplicate" "true"
             ;;
         "--gzip")
             set_option "gzip" "true"
@@ -983,11 +1169,11 @@ function log_debug {
 # Help                                                                         #
 ################################################################################
 help() {
-    log "Usage archange [OPTION]..."
+    log "Usage archange [OPTIONS]..."
     log "Version $PROJECT_VERSION"
     log "Save the history of a server with a ls command by creating a file history in the local machine"
     log
-    log "Syntax: archange [-v|--no-details|--setup|--history][--sync]"
+    log "Syntax: archange [-v|--no-details|--setup|--history][--sync][--bisync][--duplicate]"
     log "Options:"
 
     log "\t --sync \t Sync one of local source folder with destination folder"

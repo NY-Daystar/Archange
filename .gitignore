@@ -1,5 +1,8 @@
 # config file
-settings.conf
+settings*.conf
+exclude-list*.conf
+filters*.conf
+duplicates*.txt
 
 # Private files
 HISTORY*
@@ -8,4 +11,4 @@ HISTORY*
 Configuration/
 History/
 archange.log
-*errors*.*
+not_in_source*.*
